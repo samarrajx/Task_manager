@@ -57,7 +57,7 @@
 
   /* ── 3. Light theme overrides ── */
   .light {
-    --bg-base:      #f1f5f9;
+    --bg-base:      #f0f4f8;
     --bg-surface:   #ffffff;
     --bg-elevated:  #f8fafc;
     --bg-overlay:   #e2e8f0;
@@ -69,17 +69,110 @@
     --accent-ring:   rgba(79 70 229 / 0.30);
 
     --text-1: #0f172a;
-    --text-2: #475569;
-    --text-3: #94a3b8;
+    --text-2: #334155;
+    --text-3: #64748b;
     --text-inv: #ffffff;
 
-    --border-subtle: rgba(0 0 0 / 0.06);
-    --border-soft:   rgba(0 0 0 / 0.10);
+    --border-subtle: rgba(0 0 0 / 0.07);
+    --border-soft:   rgba(0 0 0 / 0.12);
 
     --shadow-sm: 0 1px 3px rgba(0 0 0 / 0.08);
     --shadow-md: 0 4px 16px rgba(0 0 0 / 0.10);
     --shadow-lg: 0 8px 32px rgba(0 0 0 / 0.12);
   }
+
+  /* ── Light mode: flip hardcoded Tailwind dark utility classes ──
+     Most components use slate-900/800/700 backgrounds and slate-400/300
+     text. These overrides reinterpret those dark classes as light colours. */
+
+  /* Backgrounds */
+  .light .bg-slate-900,
+  .light .bg-\[\#080c14\],
+  .light .bg-\[\#0e1420\],
+  .light .bg-\[\#141a2a\] { background-color: #f8fafc !important; }
+
+  .light .bg-slate-800 { background-color: #f1f5f9 !important; }
+  .light .bg-slate-950 { background-color: #f0f4f8 !important; }
+
+  /* Indigo dark → light indigo tints */
+  .light .bg-indigo-950,
+  .light .bg-indigo-950\/20,
+  .light .bg-indigo-950\/30,
+  .light .bg-indigo-950\/60 { background-color: rgba(238 242 255 / 0.9) !important; }
+
+  .light .bg-indigo-900\/60,
+  .light .bg-indigo-900 { background-color: #e0e7ff !important; }
+
+  /* Emerald dark → light green tints */
+  .light .bg-emerald-950\/10,
+  .light .bg-emerald-950\/20,
+  .light .bg-emerald-950\/30 { background-color: rgba(236 253 245 / 0.9) !important; }
+
+  /* Rose dark → light red tints */
+  .light .bg-rose-950\/10,
+  .light .bg-rose-950\/20,
+  .light .bg-rose-950\/30 { background-color: rgba(255 241 242 / 0.9) !important; }
+
+  /* Violet/cyan/amber/pink dark tints */
+  .light .bg-violet-950\/30 { background-color: rgba(245 243 255 / 0.9) !important; }
+  .light .bg-cyan-950\/30   { background-color: rgba(236 254 255 / 0.9) !important; }
+  .light .bg-amber-950\/30  { background-color: rgba(255 251 235 / 0.9) !important; }
+  .light .bg-pink-950\/30   { background-color: rgba(253 242 248 / 0.9) !important; }
+  .light .bg-sky-950\/30    { background-color: rgba(240 249 255 / 0.9) !important; }
+
+  /* Text */
+  .light .text-slate-100 { color: #0f172a !important; }
+  .light .text-slate-200 { color: #1e293b !important; }
+  .light .text-slate-300 { color: #334155 !important; }
+  .light .text-slate-400 { color: #475569 !important; }
+  .light .text-slate-500 { color: #64748b !important; }
+
+  /* Borders */
+  .light .border-slate-800,
+  .light .border-slate-800\/60 { border-color: rgba(0 0 0 / 0.10) !important; }
+  .light .border-slate-700     { border-color: rgba(0 0 0 / 0.14) !important; }
+  .light .divide-slate-800\/60 > * + * { border-color: rgba(0 0 0 / 0.08) !important; }
+
+  /* Indigo borders → visible in light */
+  .light .border-indigo-800\/40,
+  .light .border-indigo-800\/50 { border-color: rgba(99 102 241 / 0.25) !important; }
+  .light .border-indigo-700\/50 { border-color: rgba(99 102 241 / 0.35) !important; }
+
+  /* Emerald/rose borders */
+  .light .border-emerald-800\/40 { border-color: rgba(16 185 129 / 0.25) !important; }
+  .light .border-rose-800\/40    { border-color: rgba(244 63 94 / 0.20) !important; }
+  .light .border-rose-500\/50    { border-color: rgba(244 63 94 / 0.35) !important; }
+
+  /* Hover states on task rows */
+  .light .hover\:bg-slate-800\/40:hover { background-color: rgba(0 0 0 / 0.04) !important; }
+  .light .hover\:bg-emerald-950\/20:hover { background-color: rgba(236 253 245 / 0.8) !important; }
+  .light .hover\:bg-rose-950\/20:hover    { background-color: rgba(255 241 242 / 0.8) !important; }
+
+  /* Sidebar & nav */
+  .light .sidebar,
+  .light .tab-bar {
+    background: #ffffff;
+    border-color: rgba(0 0 0 / 0.08);
+  }
+
+  /* Surface cards in light */
+  .light .surface {
+    background: #ffffff;
+    border-color: rgba(0 0 0 / 0.08);
+    box-shadow: 0 1px 4px rgba(0 0 0 / 0.06);
+  }
+  .light .surface-elevated {
+    background: #f8fafc;
+    border-color: rgba(0 0 0 / 0.10);
+  }
+
+  /* Chart / recharts area */
+  .light .recharts-cartesian-grid line { stroke: rgba(0 0 0 / 0.08) !important; }
+  .light .recharts-text { fill: #475569 !important; }
+
+  /* Scrollbar in light */
+  .light ::-webkit-scrollbar-thumb { background: rgba(0 0 0 / 0.15); }
+
 
   /* ── 4. Base resets ── */
   *, *::before, *::after {
