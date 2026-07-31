@@ -1,18 +1,22 @@
 # Habit Tracker Setup Guide & Web App Deployment
 
-This guide walks you through configuring secret token authentication and deploying your Google Apps Script as a Web App API.
+This guide walks you through configuring secret token authentication, deploying your Google Apps Script as a Web App API, and configuring your local frontend environment.
 
 ---
 
-## 1. Update your Apps Script Code
-Copy the full content from **[Code.gs](file:///c:/Users/Samar%20Raj/Desktop/tasks%20tracker/Code.gs)** into your Apps Script editor.
+## 1. Update Apps Script Code
+Copy the full content from `Code.gs` in the root of this repository into your Google Apps Script editor.
 
 ---
 
 ## 2. Set Your Secret Token
-1. In the Apps Script toolbar, select the function **`promptSetSecretToken`** and click **Run**.
-2. Enter your desired secret token (or keep the default: `my-habit-secret-123`).
-3. Click **OK**. This stores your token securely in Apps Script **Script Properties**.
+1. Generate a strong random secret token (32+ characters recommended, e.g. using a password manager or `openssl rand -hex 16`).
+2. In the Apps Script toolbar, select the function **`promptSetSecretToken`** and click **Run**.
+3. Paste your generated 32+ character secret token into the prompt dialog.
+4. Click **OK**. This stores your token securely in Apps Script **Script Properties**.
+
+> [!IMPORTANT]
+> Do NOT use simple or default fallback tokens. Always set a unique 32+ character secret token.
 
 ---
 
@@ -29,5 +33,20 @@ Copy the full content from **[Code.gs](file:///c:/Users/Samar%20Raj/Desktop/task
 
 ---
 
-## Web App Deployment URL
-`https://script.google.com/macros/s/AKfycbzuCJa72RoSdQNm6QcLnqQ5CrP2ySH2vKygLHGxmZc1CGNQGC2lKol0p_SoWIwwE6vW/exec`
+## 4. Local Frontend Configuration
+1. Copy `src/config.local.example.ts` to `src/config.local.ts` (which is gitignored to keep your secrets private):
+   ```bash
+   cp src/config.local.example.ts src/config.local.ts
+   ```
+2. Open `src/config.local.ts` and set your credentials:
+   ```typescript
+   export const LOCAL_CONFIG = {
+     WEB_APP_URL: 'YOUR_DEPLOYMENT_URL_HERE',
+     SECRET_TOKEN: 'YOUR_32_CHAR_RANDOM_SECRET_TOKEN_HERE'
+   };
+   ```
+
+---
+
+## Web App Deployment URL Placeholder
+`YOUR_DEPLOYMENT_URL_HERE`

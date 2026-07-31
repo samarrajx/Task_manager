@@ -21,21 +21,30 @@ function onOpen() {
 
 function promptSetSecretToken() {
   const ui = SpreadsheetApp.getUi();
-  const response = ui.prompt('Set Secret Token', 'Enter your secret authentication token:', ui.ButtonSet.OK_CANCEL);
+  const response = ui.prompt(
+    'Set Secret Token',
+    'Enter a strong random secret token (32+ characters recommended):',
+    ui.ButtonSet.OK_CANCEL
+  );
   if (response.getSelectedButton() == ui.Button.OK) {
     const token = response.getResponseText().trim();
     if (token) {
       setSecretToken(token);
+    } else {
+      ui.alert('Token cannot be empty. Please generate a strong random token.');
     }
   }
 }
 
 function setSecretToken(token) {
-  const t = token || 'my-habit-secret-123';
+  const t = (token || '').trim();
+  if (!t) {
+    throw new Error('SECRET_TOKEN cannot be empty. Please generate a strong random token (32+ characters).');
+  }
   PropertiesService.getScriptProperties().setProperty('SECRET_TOKEN', t);
   if (typeof SpreadsheetApp !== 'undefined' && SpreadsheetApp.getUi) {
     try {
-      SpreadsheetApp.getUi().alert('SECRET_TOKEN set successfully to: ' + t);
+      SpreadsheetApp.getUi().alert('SECRET_TOKEN set successfully in Script Properties!');
     } catch(e){}
   }
   return t;
@@ -43,7 +52,10 @@ function setSecretToken(token) {
 
 function getSecretToken_() {
   const storedSecret = PropertiesService.getScriptProperties().getProperty('SECRET_TOKEN');
-  return storedSecret || 'my-habit-secret-123';
+  if (!storedSecret) {
+    throw new Error('SECRET_TOKEN missing in Script Properties. Run promptSetSecretToken to set a strong 32+ character random secret token.');
+  }
+  return storedSecret;
 }
 
 function syncNow() {
@@ -139,14 +151,20 @@ function createTimeDrivenTrigger() {
 // ==========================================
 
 function checkAuth_(e, payload) {
-  const validSecret = getSecretToken_();
-  const tokenInQuery = e && e.parameter && e.parameter.token;
-  const tokenInPayload = payload && payload.token;
+  try {
+    const validSecret = getSecretToken_();
+    if (!validSecret) return false;
+    const tokenInQuery = e && e.parameter && e.parameter.token;
+    const tokenInPayload = payload && payload.token;
 
-  if (tokenInQuery === validSecret || tokenInPayload === validSecret) {
-    return true;
+    if (tokenInQuery === validSecret || tokenInPayload === validSecret) {
+      return true;
+    }
+    return false;
+  } catch (err) {
+    Logger.log('Auth check error: ' + err.message);
+    return false;
   }
-  return false;
 }
 
 function jsonResponse_(data) {
