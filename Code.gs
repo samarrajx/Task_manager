@@ -17,6 +17,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Set Secret Token', 'promptSetSecretToken')
     .addItem('Initialize Sheet Tabs & Headers', 'setupInitialSheet')
+    .addItem('Format All Sheets', 'formatAllSheets')
     .addItem('Setup 15-Min Auto-Sync Trigger', 'createTimeDrivenTrigger')
     .addToUi();
 }
@@ -78,6 +79,27 @@ function recalculateAll() {
 function setupInitialSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
+  // ── Tab colour palette ──
+  const TAB_COLORS = {
+    'Config':     '#4f46e5', // indigo
+    'DailyTasks': '#0ea5e9', // sky blue
+    'Streaks':    '#f59e0b', // amber
+    'Goals':      '#10b981', // emerald
+    'Notes':      '#8b5cf6', // violet
+    'Dashboard':  '#ef4444', // red
+  };
+
+  // ── Header styles per sheet ──
+  const HEADER_BG = {
+    'Config':     '#312e81',
+    'DailyTasks': '#0c4a6e',
+    'Streaks':    '#78350f',
+    'Goals':      '#064e3b',
+    'Notes':      '#4c1d95',
+    'Dashboard':  '#7f1d1d',
+  };
+
+  // ── Initial data ──
   const tabs = {
     'Config': [
       ['List Name (optional override)', 'Category Label'],
@@ -89,10 +111,10 @@ function setupInitialSheet() {
       ['Date', 'Google Task ID', 'Task Name', 'Status', 'Completed At', 'Priority', 'Category', 'Is Optional']
     ],
     'Streaks': [
-      ['Task', 'Current', 'Best']
+      ['Task Name', 'Current Streak', 'Best Streak']
     ],
     'Goals': [
-      ['Task', 'Period', 'Target', 'Unit']
+      ['Task Name', 'Period', 'Target', 'Unit']
     ],
     'Notes': [
       ['Date', 'Mood', 'Energy', 'Wins', 'Challenges']
@@ -108,22 +130,156 @@ function setupInitialSheet() {
     ]
   };
 
+  // ── Column widths per sheet ──
+  const COL_WIDTHS = {
+    'Config':     [220, 160],
+    'DailyTasks': [100, 220, 220, 90, 160, 80, 120, 90],
+    'Streaks':    [220, 120, 120],
+    'Goals':      [220, 80, 80, 80],
+    'Notes':      [100, 80, 80, 200, 200],
+    'Dashboard':  [240, 180],
+  };
+
   for (const [tabName, data] of Object.entries(tabs)) {
     let sheet = ss.getSheetByName(tabName);
     if (!sheet) {
       sheet = ss.insertSheet(tabName);
     }
+
+    // Write data only if sheet is empty
     if (sheet.getLastRow() === 0) {
       sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
-      sheet.getRange(1, 1, 1, data[0].length).setFontWeight('bold');
+    }
+
+    const numCols = data[0].length;
+
+    // ── Header row styling ──
+    const headerRange = sheet.getRange(1, 1, 1, numCols);
+    headerRange
+      .setBackground(HEADER_BG[tabName] || '#1e293b')
+      .setFontColor('#ffffff')
+      .setFontWeight('bold')
+      .setFontSize(11)
+      .setVerticalAlignment('middle')
+      .setHorizontalAlignment('center')
+      .setBorder(false, false, true, false, false, false, '#6366f1', SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+
+    sheet.setRowHeight(1, 36);
+
+    // ── Freeze header row ──
+    sheet.setFrozenRows(1);
+
+    // ── Column widths ──
+    const widths = COL_WIDTHS[tabName] || [];
+    widths.forEach((w, i) => {
+      if (w) sheet.setColumnWidth(i + 1, w);
+    });
+
+    // ── Tab colour ──
+    sheet.setTabColor(TAB_COLORS[tabName] || '#64748b');
+
+    // ── Alternating row banding ──
+    // Remove existing bandings first
+    const existingBandings = sheet.getBandings();
+    existingBandings.forEach(b => b.remove());
+
+    if (tabName !== 'Config') {
+      const lastCol = numCols;
+      const bandRange = sheet.getRange(2, 1, Math.max(50, sheet.getLastRow()), lastCol);
+      sheet.addConditionalFormatRule(
+        SpreadsheetApp.newConditionalFormatRule()
+          .whenFormulaSatisfied('=MOD(ROW(),2)=0')
+          .setBackground('#f8fafc')
+          .setRanges([bandRange])
+          .build()
+      );
+    }
+
+    // ── Sheet-specific extra formatting ──
+    if (tabName === 'Config') {
+      // Style the settings separator row
+      const lastRow = sheet.getLastRow();
+      for (let r = 2; r <= lastRow; r++) {
+        const cellVal = String(sheet.getRange(r, 1).getValue()).trim();
+        if (cellVal.startsWith('---')) {
+          const sepRange = sheet.getRange(r, 1, 1, numCols);
+          sepRange
+            .setBackground('#1e3a5f')
+            .setFontColor('#93c5fd')
+            .setFontWeight('bold')
+            .setFontStyle('italic');
+        }
+      }
+      // Right-align value column
+      sheet.getRange(1, 2, Math.max(sheet.getLastRow(), 10), 1).setHorizontalAlignment('left');
+    }
+
+    if (tabName === 'DailyTasks') {
+      // Status column — center align
+      sheet.getRange(1, 4, 1, 1).setHorizontalAlignment('center');
+      sheet.getRange(1, 6, 1, 1).setHorizontalAlignment('center');
+      sheet.getRange(1, 8, 1, 1).setHorizontalAlignment('center');
+      // Date column — center align
+      sheet.getRange(1, 1, 1, 1).setHorizontalAlignment('center');
+    }
+
+    if (tabName === 'Dashboard') {
+      // Metric column bold
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        sheet.getRange(2, 1, lastRow - 1, 1)
+          .setFontWeight('bold')
+          .setFontColor('#1e293b');
+        sheet.getRange(2, 2, lastRow - 1, 1)
+          .setFontColor('#4f46e5')
+          .setFontWeight('bold')
+          .setHorizontalAlignment('center');
+      }
+      // Style each metric row with alternating backgrounds
+      const metricColors = ['#eff6ff','#f0fdf4','#fff7ed','#fdf4ff','#fef9c3','#f0f9ff'];
+      for (let r = 2; r <= lastRow; r++) {
+        sheet.getRange(r, 1, 1, 2).setBackground(metricColors[(r - 2) % metricColors.length]);
+        sheet.setRowHeight(r, 32);
+      }
+    }
+
+    if (tabName === 'Streaks') {
+      sheet.getRange(1, 2, 1, 2).setHorizontalAlignment('center');
+    }
+
+    if (tabName === 'Goals') {
+      sheet.getRange(1, 2, 1, 3).setHorizontalAlignment('center');
     }
   }
 
+  // ── Reorder tabs nicely ──
+  const tabOrder = ['Dashboard', 'DailyTasks', 'Config', 'Streaks', 'Goals', 'Notes'];
+  tabOrder.forEach((name, i) => {
+    const s = ss.getSheetByName(name);
+    if (s) ss.moveActiveSheet && ss.setActiveSheet(s) && ss.moveActiveSheet(i + 1);
+  });
+
   if (typeof SpreadsheetApp !== 'undefined' && SpreadsheetApp.getUi) {
     try {
-      SpreadsheetApp.getUi().alert('Habit Tracker tabs initialized successfully!');
+      SpreadsheetApp.getUi().alert(
+        '✅ Habit Tracker sheets initialized and formatted!\n\n' +
+        '• Colour-coded tab labels\n' +
+        '• Styled headers with frozen rows\n' +
+        '• Optimized column widths\n' +
+        '• Alternating row shading\n\n' +
+        'Next: Habit Tracker > Sync Tasks Now'
+      );
     } catch(e){}
   }
+}
+
+/**
+ * Re-applies all sheet formatting without touching data.
+ * Use this if you want to reformat existing sheets.
+ * Run via: Habit Tracker > Format All Sheets
+ */
+function formatAllSheets() {
+  setupInitialSheet();
 }
 
 function createTimeDrivenTrigger() {
