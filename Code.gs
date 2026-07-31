@@ -186,13 +186,13 @@ function setupInitialSheet() {
     if (tabName !== 'Config') {
       const lastCol = numCols;
       const bandRange = sheet.getRange(2, 1, Math.max(50, sheet.getLastRow()), lastCol);
-      sheet.addConditionalFormatRule(
-        SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied('=MOD(ROW(),2)=0')
-          .setBackground('#f8fafc')
-          .setRanges([bandRange])
-          .build()
-      );
+      const existingRules = sheet.getConditionalFormatRules();
+      const bandingRule = SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=MOD(ROW(),2)=0')
+        .setBackground('#f0f4f8')
+        .setRanges([bandRange])
+        .build();
+      sheet.setConditionalFormatRules([...existingRules, bandingRule]);
     }
 
     // ── Sheet-specific extra formatting ──
