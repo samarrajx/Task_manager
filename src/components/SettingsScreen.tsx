@@ -60,6 +60,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onSettingsSaved 
   const [cutoffHour, setCutoffHour] = useState<number>(4);
   const [mappings, setMappings] = useState<ListMappingItem[]>([]);
 
+  // API Credentials state
+  const [customUrl, setCustomUrl] = useState<string>(() => {
+    try { return localStorage.getItem('ht_custom_url') || ''; } catch { return ''; }
+  });
+  const [customToken, setCustomToken] = useState<string>(() => {
+    try { return localStorage.getItem('ht_custom_token') || ''; } catch { return ''; }
+  });
+
   // Add list state
   const [newListName, setNewListName] = useState<string>('');
   const [newCategory, setNewCategory] = useState<string>('');
@@ -273,23 +281,106 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onSettingsSaved 
     );
   }
 
+  const handleSaveApiCredentials = (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (customUrl.trim()) {
+        localStorage.setItem('ht_custom_url', customUrl.trim());
+      } else {
+        localStorage.removeItem('ht_custom_url');
+      }
+
+      if (customToken.trim()) {
+        localStorage.setItem('ht_custom_token', customToken.trim());
+      } else {
+        localStorage.removeItem('ht_custom_token');
+      }
+
+      setSuccessMsg('API Credentials saved successfully to browser storage!');
+      if (onSettingsSaved) onSettingsSaved();
+      loadSettings();
+      setTimeout(() => setSuccessMsg(null), 5000);
+    } catch (err: any) {
+      setErrorMsg('Failed to save API Credentials to browser storage.');
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Header Notification */}
+      {successMsg && (
+        <div className="p-4 rounded-xl bg-emerald-950/80 border border-emerald-800 text-emerald-200 text-xs font-semibold flex items-center gap-2">
+          <CheckCircle2 size={18} className="text-emerald-400 flex-shrink-0" />
+          <span>{successMsg}</span>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="p-4 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-200 text-xs font-semibold">
+          {errorMsg}
+        </div>
+      )}
+
+      {/* SECTION 0: Web App API Credentials */}
+      <div className="surface p-5 sm:p-6 rounded-2xl border border-indigo-500/40 bg-indigo-950/20 space-y-4">
+        <div className="flex items-center justify-between border-b border-indigo-900/50 pb-3">
+          <div className="flex items-center gap-2">
+            <ShieldCheck size={20} className="text-indigo-400" />
+            <h2 className="text-base font-bold text-slate-100">Google Apps Script API Connection</h2>
+          </div>
+          <span className="text-[11px] text-indigo-300 bg-indigo-950/80 border border-indigo-800/60 px-2.5 py-1 rounded-full font-semibold">
+            Browser Storage
+          </span>
+        </div>
+
+        <form onSubmit={handleSaveApiCredentials} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300 block">
+                Google Apps Script Web App URL
+              </label>
+              <input
+                type="url"
+                value={customUrl}
+                onChange={(e) => setCustomUrl(e.target.value)}
+                placeholder="https://script.google.com/macros/s/.../exec"
+                className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+              />
+              <span className="text-[11px] text-slate-400 block">
+                The Web App URL generated when deploying your Apps Script backend as "Anyone".
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300 block">
+                Secret Token
+              </label>
+              <input
+                type="password"
+                value={customToken}
+                onChange={(e) => setCustomToken(e.target.value)}
+                placeholder="Enter your 32+ character random secret token"
+                className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+              />
+              <span className="text-[11px] text-slate-400 block">
+                The 32+ character token set in Apps Script Script Properties.
+              </span>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-1">
+            <button
+              type="submit"
+              className="btn btn-primary text-xs flex items-center gap-1.5 px-4 py-2 cursor-pointer"
+            >
+              <Save size={14} />
+              <span>Save API Credentials</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
       <form onSubmit={handleSave} className="space-y-6">
-        {/* Header Notification */}
-        {successMsg && (
-          <div className="p-4 rounded-xl bg-emerald-950/80 border border-emerald-800 text-emerald-200 text-xs font-semibold flex items-center gap-2">
-            <CheckCircle2 size={18} className="text-emerald-400 flex-shrink-0" />
-            <span>{successMsg}</span>
-          </div>
-        )}
-
-        {errorMsg && (
-          <div className="p-4 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-200 text-xs font-semibold">
-            {errorMsg}
-          </div>
-        )}
-
         {/* SECTION 1: System & Timing Config */}
         <div className="surface p-5 sm:p-6 rounded-2xl border border-slate-800 space-y-4">
           <div className="flex items-center gap-2 border-b border-slate-800 pb-3">

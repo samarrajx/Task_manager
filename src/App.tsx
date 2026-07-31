@@ -13,8 +13,9 @@ import { NotesScreen } from './components/NotesScreen';
 import { ReportsScreen } from './components/ReportsScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { habitApi } from './services/api';
+import { getApiConfig } from './config';
 import type { SettingsData } from './types';
-import { RefreshCw, WifiOff } from 'lucide-react';
+import { RefreshCw, WifiOff, AlertTriangle } from 'lucide-react';
 
 /* ─────────────────────────────────────────────────────
    Placeholder screen component for unbuilt tabs
@@ -303,6 +304,23 @@ const AppShell: React.FC = () => {
           onRefresh={checkConnection}
           refreshing={refreshing}
         />
+
+        {getApiConfig().isUnconfigured && (
+          <div className="mb-6 p-4 rounded-2xl bg-amber-950/70 border border-amber-800/60 text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={18} className="text-amber-400 flex-shrink-0" />
+              <span>
+                <strong>API Credentials Not Configured:</strong> Please set your Google Apps Script Web App URL & Secret Token in <strong>Settings</strong> or GitHub Repository Secrets.
+              </span>
+            </div>
+            <button
+              onClick={() => navigate('settings')}
+              className="btn btn-secondary text-xs px-3 py-1.5 flex-shrink-0 cursor-pointer"
+            >
+              Configure Settings
+            </button>
+          </div>
+        )}
 
         {renderActiveScreen()}
       </main>

@@ -1,4 +1,4 @@
-import { API_CONFIG } from '../config';
+import { getApiConfig } from '../config';
 import type {
   TaskItem,
   StreakItem,
@@ -13,13 +13,14 @@ import type {
 } from '../types';
 
 /**
- * Enhanced fetchApi with offline caching & read-only fallback logic.
+ * Enhanced fetchApi with offline caching & safe unconfigured fallback.
  * Saves last-fetched Dashboard, Today, Streaks, Statistics, Trends, etc. to localStorage.
- * When offline, falls back to cached data seamlessly.
+ * When offline or unconfigured, falls back to cached data cleanly.
  */
 async function fetchApi<T>(action: string, method: 'GET' | 'POST' = 'GET', extraData: Record<string, any> = {}): Promise<T> {
-  const token = API_CONFIG.SECRET_TOKEN;
-  const baseUrl = API_CONFIG.WEB_APP_URL;
+  const config = getApiConfig();
+  const token = config.SECRET_TOKEN;
+  const baseUrl = config.WEB_APP_URL;
   const cacheKey = `ht-offline-cache-${action}`;
 
   // Helper to save to offline cache
@@ -46,12 +47,15 @@ async function fetchApi<T>(action: string, method: 'GET' | 'POST' = 'GET', extra
 
   const isReadAction = action.startsWith('get');
 
-  // Check if browser is strictly offline for read action
-  if (!navigator.onLine && isReadAction) {
+  // If unconfigured or offline, try to serve cached data first without throwing 404 fetch errors
+  if ((config.isUnconfigured || !navigator.onLine) && isReadAction) {
     const cachedData = getFromCache();
     if (cachedData !== null) {
-      console.info(`[Offline Mode] Serving cached data for action: ${action}`);
+      console.info(`[Cached Mode] Serving stored data for action: ${action}`);
       return cachedData;
+    }
+    if (config.isUnconfigured) {
+      throw new Error(`API Web App URL is unconfigured. Please configure your Web App URL in Settings or GitHub Repository Secrets.`);
     }
   }
 
@@ -59,7 +63,21 @@ async function fetchApi<T>(action: string, method: 'GET' | 'POST' = 'GET', extra
     if (method === 'GET') {
       const url = `${baseUrl}?action=${encodeURIComponent(action)}&token=${encodeURIComponent(token)}`;
       const res = await fetch(url);
-      const data = await res.json();
+      
+      const contentType = res.headers.get('content-type') || '';
+      const text = await res.text();
+
+      if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html') || contentType.includes('text/html')) {
+        throw new Error(`Server returned HTML instead of JSON (404 Not Found). Please verify your Google Apps Script Web App URL.`);
+      }
+
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch (pErr) {
+        throw new Error(`Failed to parse JSON response for action [${action}].`);
+      }
+
       if (data && data.success !== false) {
         const result = data.data !== undefined ? data.data : data;
         saveToCache(result);
@@ -81,7 +99,20 @@ async function fetchApi<T>(action: string, method: 'GET' | 'POST' = 'GET', extra
         body: bodyPayload
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      const text = await res.text();
+
+      if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html') || contentType.includes('text/html')) {
+        throw new Error(`Server returned HTML instead of JSON (404 Not Found). Please verify your Google Apps Script Web App URL.`);
+      }
+
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch (pErr) {
+        throw new Error(`Failed to parse POST response for action [${action}].`);
+      }
+
       if (data && data.success !== false) {
         if (isReadAction) {
           saveToCache(data.data !== undefined ? data.data : data);
@@ -91,13 +122,13 @@ async function fetchApi<T>(action: string, method: 'GET' | 'POST' = 'GET', extra
       throw new Error(data.error || 'Failed to execute POST operation');
     }
   } catch (err: any) {
-    console.warn(`API Exception [${action}]:`, err);
+    console.warn(`API Exception [${action}]:`, err?.message || err);
 
-    // Fallback to offline cache for read actions if network fails
+    // Fallback to offline cache for read actions if network or parsing fails
     if (isReadAction) {
       const cachedData = getFromCache();
       if (cachedData !== null) {
-        console.info(`[Offline Fallback] Serving cached data for action: ${action}`);
+        console.info(`[Fallback Mode] Serving cached data for action: ${action}`);
         return cachedData;
       }
     }
