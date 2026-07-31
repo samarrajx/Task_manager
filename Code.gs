@@ -80,8 +80,7 @@ function setupInitialSheet() {
 
   const tabs = {
     'Config': [
-      ['List Name', 'Category'],
-      ['My Tasks', 'General'],
+      ['List Name (optional override)', 'Category Label'],
       ['--- SETTINGS ---', '--- VALUE ---'],
       ['Timezone', 'Asia/Kolkata'],
       ['Day Cutoff Hour', '4']
