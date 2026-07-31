@@ -176,6 +176,8 @@ const AppShell: React.FC = () => {
   const [missedCount, setMissedCount] = useState<number>(0);
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
 
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<string | null>(null);
+
   const checkConnection = useCallback(async () => {
     setConnStatus('checking');
     setRefreshing(true);
@@ -223,7 +225,12 @@ const AppShell: React.FC = () => {
   const renderActiveScreen = () => {
     switch (activeTab) {
       case 'today':
-        return <TodayScreen />;
+        return (
+          <TodayScreen
+            filterCategory={activeCategoryFilter}
+            onClearFilter={() => setActiveCategoryFilter(null)}
+          />
+        );
       case 'dashboard':
         return <DashboardScreen onNavigate={(t) => navigate(t as TabId)} />;
       case 'streaks':
@@ -233,7 +240,14 @@ const AppShell: React.FC = () => {
       case 'trends':
         return <TrendsScreen />;
       case 'categories':
-        return <CategoriesScreen onSelectCategory={() => navigate('today')} />;
+        return (
+          <CategoriesScreen
+            onSelectCategory={(cat) => {
+              setActiveCategoryFilter(cat);
+              navigate('today');
+            }}
+          />
+        );
       case 'goals':
         return <GoalsScreen />;
       case 'missed':
