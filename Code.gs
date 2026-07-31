@@ -599,6 +599,12 @@ function handleGetDashboard_() {
 }
 
 function handleGetToday_() {
+  try {
+    fetchAndSyncAllTasks_();
+  } catch (err) {
+    Logger.log('Sync note in handleGetToday_: ' + err.message);
+  }
+
   const config = getConfig_();
   const todayStr = getAdjustedTodayDateString_(config.timezone, config.cutoffHour);
   const ss = SpreadsheetApp.getActiveSpreadsheet();

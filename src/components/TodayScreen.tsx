@@ -107,20 +107,37 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({ filterCategory, onClea
       )}
 
       {displayedTasks.length === 0 ? (
-        <div className="surface p-12 text-center rounded-2xl">
-          <p className="text-slate-400 text-sm">
-            {filterCategory
-              ? `No habits found for category "${filterCategory}".`
-              : "No habits scheduled for today."}
-          </p>
-          {filterCategory && onClearFilter && (
+        <div className="surface p-10 text-center rounded-2xl border border-slate-800 space-y-4 max-w-md mx-auto my-8">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-950/60 text-indigo-400 border border-indigo-800/40 flex items-center justify-center mx-auto">
+            <CheckCircle2 size={24} />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-slate-100">
+              {filterCategory ? `No habits in "${filterCategory}"` : "No Habits Scheduled For Today"}
+            </h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              {filterCategory
+                ? `There are no scheduled habits matching category "${filterCategory}".`
+                : "Add tasks in your Google Tasks lists, or click refresh below to fetch the latest habits."}
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
+            {filterCategory && onClearFilter && (
+              <button
+                onClick={onClearFilter}
+                className="btn btn-ghost text-xs px-4 py-2 cursor-pointer"
+              >
+                Clear Category Filter
+              </button>
+            )}
             <button
-              onClick={onClearFilter}
-              className="btn btn-ghost text-xs mt-3 cursor-pointer"
+              onClick={loadData}
+              className="btn btn-primary text-xs flex items-center gap-1.5 px-4 py-2 cursor-pointer"
             >
-              Clear category filter
+              <span>Refresh Today's Tasks</span>
             </button>
-          )}
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
