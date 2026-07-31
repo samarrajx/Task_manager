@@ -12,6 +12,7 @@ function onOpen() {
   ui.createMenu('Habit Tracker')
     .addItem('Sync Tasks Now', 'syncNow')
     .addItem('Recalculate Streaks & Dashboard', 'recalculateAll')
+    .addItem('Run Sync Diagnostics', 'runSyncDiagnostics')
     .addSeparator()
     .addItem('Set Secret Token', 'promptSetSecretToken')
     .addItem('Initialize Sheet Tabs & Headers', 'setupInitialSheet')
@@ -77,9 +78,9 @@ function setupInitialSheet() {
   const tabs = {
     'Config': [
       ['List Name', 'Category'],
-      ['', ''],
+      ['My Tasks', 'General'],
       ['--- SETTINGS ---', '--- VALUE ---'],
-      ['Timezone', 'America/New_York'],
+      ['Timezone', 'Asia/Kolkata'],
       ['Day Cutoff Hour', '4']
     ],
     'DailyTasks': [
@@ -933,9 +934,17 @@ function updateConfigSetting_(sheet, settingName, settingValue) {
 function getConfig_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('Config');
+  
+  let defaultTz = 'Asia/Kolkata';
+  try {
+    if (typeof Session !== 'undefined' && Session.getScriptTimeZone) {
+      defaultTz = Session.getScriptTimeZone() || 'Asia/Kolkata';
+    }
+  } catch(e){}
+
   const config = {
     categoryMap: {},
-    timezone: 'America/New_York',
+    timezone: defaultTz,
     cutoffHour: 4
   };
 
@@ -977,11 +986,34 @@ function getAdjustedTodayDateString_(timezone, cutoffHour) {
   return Utilities.formatDate(adjusted, timezone, 'yyyy-MM-dd');
 }
 
+/**
+ * Safely extracts date-only YYYY-MM-DD from ISO strings or Date objects
+ * without re-interpreting midnight UTC due dates as local instant offsets.
+ */
+function extractDateOnlyString_(dateObjOrStr) {
+  if (!dateObjOrStr) return '';
+  const s = String(dateObjOrStr).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    return s.substring(0, 10);
+  }
+  try {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().substring(0, 10);
+    }
+  } catch(e){}
+  return s.substring(0, 10);
+}
+
 function formatDateString_(dateObjOrStr, timezone) {
   if (!dateObjOrStr) return '';
-  const d = new Date(dateObjOrStr);
-  if (isNaN(d.getTime())) return String(dateObjOrStr).substring(0, 10);
-  return Utilities.formatDate(d, timezone, 'yyyy-MM-dd');
+  const s = String(dateObjOrStr).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    return s.substring(0, 10);
+  }
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return s.substring(0, 10);
+  return Utilities.formatDate(d, timezone || 'Asia/Kolkata', 'yyyy-MM-dd');
 }
 
 function fetchAndSyncAllTasks_() {
@@ -1051,11 +1083,12 @@ function fetchAndSyncAllTasks_() {
 
       const isOptional = /#optional/i.test(combinedText) || /#opt/i.test(combinedText);
 
+      // Fix: Use date-only string slicing for task.due to avoid timezone shifting
       let taskDateStr = todayStr;
       if (task.due) {
-        taskDateStr = formatDateString_(task.due, config.timezone);
+        taskDateStr = extractDateOnlyString_(task.due);
       } else if (task.completed) {
-        taskDateStr = formatDateString_(task.completed, config.timezone);
+        taskDateStr = extractDateOnlyString_(task.completed);
       }
 
       let status = 'Pending';
@@ -1063,7 +1096,11 @@ function fetchAndSyncAllTasks_() {
 
       if (task.status === 'completed') {
         status = 'Completed';
-        completedAtStr = task.completed ? Utilities.formatDate(new Date(task.completed), config.timezone, "yyyy-MM-dd HH:mm:ss") : new Date().toISOString();
+        if (task.completed) {
+          completedAtStr = String(task.completed).replace('T', ' ').replace('Z', '').substring(0, 19);
+        } else {
+          completedAtStr = Utilities.formatDate(new Date(), config.timezone, "yyyy-MM-dd HH:mm:ss");
+        }
       } else if (taskDateStr && taskDateStr < todayStr) {
         status = 'Missed';
       } else {
@@ -1294,4 +1331,98 @@ function updateDashboard_() {
   dashSheet.clearContents();
   dashSheet.getRange(1, 1, dashboardData.length, 2).setValues(dashboardData);
   dashSheet.getRange(1, 1, 1, 2).setFontWeight('bold');
+}
+
+/**
+ * Diagnostics menu tool: logs and writes detailed date calculation breakdown
+ * to the "Diagnostics" sheet tab for troubleshooting timezone/date bucket issues.
+ */
+function runSyncDiagnostics() {
+  const config = getConfig_();
+  const scriptTz = (typeof Session !== 'undefined' && Session.getScriptTimeZone) ? Session.getScriptTimeZone() : 'N/A';
+  const todayStr = getAdjustedTodayDateString_(config.timezone, config.cutoffHour);
+
+  Logger.log('=== HABIT TRACKER SYNC DIAGNOSTICS ===');
+  Logger.log('Today Date String (todayStr): ' + todayStr);
+  Logger.log('Configured Timezone: ' + config.timezone);
+  Logger.log('Script Native Timezone: ' + scriptTz);
+  Logger.log('Day Cutoff Hour: ' + config.cutoffHour);
+
+  const diagRows = [
+    ['--- DIAGNOSTIC METRIC ---', '--- VALUE / DETAILS ---'],
+    ['Today Date String (todayStr)', todayStr],
+    ['Configured Timezone', config.timezone],
+    ['Script Native Timezone', scriptTz],
+    ['Day Cutoff Hour', config.cutoffHour],
+    ['System Date (Now)', new Date().toISOString()],
+    ['', ''],
+    ['List Title', 'Task Title', 'Raw task.due', 'Parsed Due Date (Date-Only)', 'Raw task.completed', 'Parsed Completed Date', 'Assigned Date Bucket', 'Status']
+  ];
+
+  try {
+    const taskListsResponse = Tasks.Tasklists.list();
+    const items = taskListsResponse.items || [];
+
+    items.forEach(function(list) {
+      const listTitle = list.title || 'Default';
+      let tasksResponse;
+      try {
+        tasksResponse = Tasks.Tasks.list(list.id, { showCompleted: true, showHidden: true, showDeleted: false });
+      } catch (e) {
+        return;
+      }
+
+      const tasks = tasksResponse.items || [];
+      tasks.forEach(function(task) {
+        if (!task.id || !task.title) return;
+        
+        const rawDue = task.due || '';
+        const parsedDue = rawDue ? extractDateOnlyString_(rawDue) : '';
+        const rawCompleted = task.completed || '';
+        const parsedCompleted = rawCompleted ? extractDateOnlyString_(rawCompleted) : '';
+
+        let assignedDate = todayStr;
+        if (rawDue) assignedDate = parsedDue;
+        else if (rawCompleted) assignedDate = parsedCompleted;
+
+        let status = task.status === 'completed' ? 'Completed' : (assignedDate < todayStr ? 'Missed' : 'Pending');
+
+        diagRows.push([
+          listTitle,
+          task.title,
+          rawDue,
+          parsedDue,
+          rawCompleted,
+          parsedCompleted,
+          assignedDate,
+          status
+        ]);
+
+        Logger.log(`[Diagnostic Task] "${task.title}" | Raw Due: "${rawDue}" -> Parsed: "${parsedDue}" | Raw Completed: "${rawCompleted}" -> Parsed: "${parsedCompleted}" | Bucket: "${assignedDate}" | Status: ${status}`);
+      });
+    });
+  } catch (err) {
+    Logger.log('Diagnostics task fetch error: ' + err.message);
+    diagRows.push(['Error Fetching Tasks', err.message]);
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName('Diagnostics');
+  if (!sheet) {
+    sheet = ss.insertSheet('Diagnostics');
+  } else {
+    sheet.clearContents();
+  }
+
+  sheet.getRange(1, 1, diagRows.length, diagRows[0].length).setValues(diagRows);
+  sheet.getRange(1, 1, 1, diagRows[0].length).setFontWeight('bold');
+  sheet.getRange(8, 1, 1, diagRows[7].length).setFontWeight('bold');
+
+  if (typeof SpreadsheetApp !== 'undefined' && SpreadsheetApp.getUi) {
+    try {
+      SpreadsheetApp.getUi().alert('Sync Diagnostics complete!\n\nToday Date: ' + todayStr + '\nConfigured Timezone: ' + config.timezone + '\n\nFull task diagnostic details written to the "Diagnostics" sheet tab.');
+    } catch(e){}
+  }
+
+  return diagRows;
 }
