@@ -13,6 +13,7 @@ function onOpen() {
     .addItem('Sync Tasks Now', 'syncNow')
     .addItem('Recalculate Streaks & Dashboard', 'recalculateAll')
     .addItem('Run Sync Diagnostics', 'runSyncDiagnostics')
+    .addItem('Run Today Diagnostics', 'runTodayDiagnostics')
     .addSeparator()
     .addItem('Set Secret Token', 'promptSetSecretToken')
     .addItem('Initialize Sheet Tabs & Headers', 'setupInitialSheet')
@@ -667,16 +668,41 @@ function handleGetToday_() {
 
   const config = getConfig_();
   const todayStr = getAdjustedTodayDateString_(config.timezone, config.cutoffHour);
+  Logger.log('[handleGetToday_] todayStr=' + todayStr + ' tz=' + config.timezone + ' cutoff=' + config.cutoffHour);
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('DailyTasks');
-  
-  if (!sheet || sheet.getLastRow() <= 1) return [];
+
+  if (!sheet) {
+    Logger.log('[handleGetToday_] DailyTasks sheet not found — returning []');
+    return [];
+  }
+
+  const lastRow = sheet.getLastRow();
+  Logger.log('[handleGetToday_] DailyTasks lastRow=' + lastRow);
+  if (lastRow <= 1) {
+    Logger.log('[handleGetToday_] DailyTasks has no data rows — returning []');
+    return [];
+  }
 
   const data = sheet.getDataRange().getValues();
   const tasks = [];
 
   for (let r = 1; r < data.length; r++) {
-    const dateStr = formatDateString_(data[r][0], config.timezone);
+    const rawCell = data[r][0];
+    // Google Sheets auto-converts date strings to Date objects.
+    // Use Utilities.formatDate for Date objects; fall back to string slice.
+    let dateStr;
+    if (rawCell instanceof Date) {
+      dateStr = Utilities.formatDate(rawCell, config.timezone, 'yyyy-MM-dd');
+    } else {
+      dateStr = String(rawCell || '').trim().substring(0, 10);
+    }
+
+    if (r <= 5) {
+      Logger.log(`[handleGetToday_] row ${r}: rawCell="${rawCell}" dateStr="${dateStr}" taskName="${data[r][2]}" status="${data[r][3]}" todayStr="${todayStr}" match=${dateStr === todayStr}`);
+    }
+
     if (dateStr === todayStr) {
       tasks.push({
         date: dateStr,
@@ -690,6 +716,8 @@ function handleGetToday_() {
       });
     }
   }
+
+  Logger.log('[handleGetToday_] Returning ' + tasks.length + ' tasks for today');
   return tasks;
 }
 
@@ -1484,4 +1512,123 @@ function runSyncDiagnostics() {
   }
 
   return diagRows;
+}
+
+/**
+ * TODAY DIAGNOSTICS: Writes a detailed breakdown of:
+ *   - todayStr, timezone, cutoffHour
+ *   - Every row in DailyTasks with raw cell value, parsed date, and whether it matches today
+ *   - Summary of Tasks API task lists and raw task.due / task.completed values
+ * Run via: Habit Tracker > Run Today Diagnostics
+ */
+function runTodayDiagnostics() {
+  const config = getConfig_();
+  const todayStr = getAdjustedTodayDateString_(config.timezone, config.cutoffHour);
+  const scriptTz = Session.getScriptTimeZone ? Session.getScriptTimeZone() : 'N/A';
+  const now = new Date();
+
+  const rows = [
+    ['--- TODAY DIAGNOSTICS ---', ''],
+    ['System ISO Timestamp (UTC)', now.toISOString()],
+    ['todayStr (computed)', todayStr],
+    ['Configured Timezone', config.timezone],
+    ['Script Timezone', scriptTz],
+    ['Day Cutoff Hour', config.cutoffHour],
+    ['', ''],
+    ['--- DAILYTASKS SHEET ---', ''],
+    ['Row', 'Raw Cell (col A)', 'typeof rawCell', 'Parsed dateStr', 'Matches todayStr?', 'Task Name', 'Status']
+  ];
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dailySheet = ss.getSheetByName('DailyTasks');
+
+  if (!dailySheet || dailySheet.getLastRow() <= 1) {
+    rows.push(['(DailyTasks sheet is empty or missing)', '', '', '', '', '', '']);
+  } else {
+    const data = dailySheet.getDataRange().getValues();
+    for (let r = 1; r < data.length; r++) {
+      const rawCell = data[r][0];
+      let dateStr;
+      if (rawCell instanceof Date) {
+        dateStr = Utilities.formatDate(rawCell, config.timezone, 'yyyy-MM-dd');
+      } else {
+        dateStr = String(rawCell || '').trim().substring(0, 10);
+      }
+      const matches = dateStr === todayStr;
+      rows.push([
+        r,
+        String(rawCell),
+        typeof rawCell,
+        dateStr,
+        matches ? 'YES ✓' : 'NO',
+        String(data[r][2] || ''),
+        String(data[r][3] || '')
+      ]);
+    }
+  }
+
+  rows.push(['', '']);
+  rows.push(['--- GOOGLE TASKS API ---', '']);
+  rows.push(['List', 'Task Title', 'task.status', 'task.due (raw)', 'task.completed (raw)', 'Parsed Due', 'Parsed Completed']);
+
+  try {
+    const taskListsResp = Tasks.Tasklists.list();
+    const lists = taskListsResp.items || [];
+    if (lists.length === 0) {
+      rows.push(['(No task lists found in Google Tasks API)', '', '', '', '', '', '']);
+    }
+    lists.forEach(function(list) {
+      let tasksResp;
+      try {
+        tasksResp = Tasks.Tasks.list(list.id, { showCompleted: true, showHidden: true, showDeleted: false });
+      } catch(e) {
+        rows.push([list.title, 'ERROR: ' + e.message, '', '', '', '', '']);
+        return;
+      }
+      const tasks = tasksResp.items || [];
+      if (tasks.length === 0) {
+        rows.push([list.title, '(no tasks)', '', '', '', '', '']);
+        return;
+      }
+      tasks.forEach(function(task) {
+        const parsedDue = task.due ? extractDateOnlyString_(task.due) : '';
+        const parsedCompleted = task.completed ? extractDateOnlyString_(task.completed) : '';
+        rows.push([
+          list.title,
+          task.title || '(untitled)',
+          task.status || '',
+          task.due || '(none)',
+          task.completed || '(none)',
+          parsedDue,
+          parsedCompleted
+        ]);
+      });
+    });
+  } catch(e) {
+    rows.push(['Tasks API error', e.message, '', '', '', '', '']);
+  }
+
+  let diagSheet = ss.getSheetByName('TodayDiag');
+  if (!diagSheet) {
+    diagSheet = ss.insertSheet('TodayDiag');
+  } else {
+    diagSheet.clearContents();
+  }
+
+  const maxCols = Math.max(...rows.map(r => r.length));
+  const paddedRows = rows.map(r => {
+    while (r.length < maxCols) r.push('');
+    return r;
+  });
+
+  diagSheet.getRange(1, 1, paddedRows.length, maxCols).setValues(paddedRows);
+  diagSheet.autoResizeColumns(1, maxCols);
+
+  SpreadsheetApp.getUi().alert(
+    'Today Diagnostics complete!\n\n' +
+    'todayStr: ' + todayStr + '\n' +
+    'Timezone: ' + config.timezone + '\n\n' +
+    'Full breakdown written to the "TodayDiag" sheet tab.\n' +
+    'Look for rows where "Matches todayStr?" = YES ✓'
+  );
 }
