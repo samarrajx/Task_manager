@@ -64,12 +64,14 @@ function syncNow() {
   markStalePendingAsMissed_();
   calculateStreaks_();
   updateDashboard_();
+  invalidateReadCache_();
 }
 
 function recalculateAll() {
   markStalePendingAsMissed_();
   calculateStreaks_();
   updateDashboard_();
+  invalidateReadCache_();
 }
 
 function setupInitialSheet() {
@@ -182,6 +184,53 @@ function jsonError_(message, status) {
   });
 }
 
+// CacheService Helpers
+function getCachedOrFetch_(actionKey, fetchFn, ttlSeconds) {
+  const ttl = ttlSeconds || 60;
+  try {
+    const cache = CacheService.getScriptCache();
+    const config = getConfig_();
+    const todayStr = getAdjustedTodayDateString_(config.timezone, config.cutoffHour);
+    const cacheKey = `ht_c_${actionKey}_${todayStr}`;
+
+    const cachedStr = cache.get(cacheKey);
+    if (cachedStr) {
+      return JSON.parse(cachedStr);
+    }
+
+    const freshData = fetchFn();
+    if (freshData !== undefined && freshData !== null) {
+      cache.put(cacheKey, JSON.stringify(freshData), ttl);
+    }
+    return freshData;
+  } catch (e) {
+    Logger.log(`Cache read note for [${actionKey}]: ${e.message}`);
+    return fetchFn();
+  }
+}
+
+function invalidateReadCache_() {
+  try {
+    const cache = CacheService.getScriptCache();
+    const config = getConfig_();
+    const todayStr = getAdjustedTodayDateString_(config.timezone, config.cutoffHour);
+    const actions = [
+      'getDashboard',
+      'getStreaks',
+      'getStatistics',
+      'getTrends',
+      'getCategories',
+      'getMissed',
+      'getGoals',
+      'getNotes'
+    ];
+    const keysToRemove = actions.map(a => `ht_c_${a}_${todayStr}`);
+    cache.removeAll(keysToRemove);
+  } catch (e) {
+    Logger.log('Cache invalidation note: ' + e.message);
+  }
+}
+
 function doGet(e) {
   let payload = {};
   try {
@@ -199,25 +248,25 @@ function doGet(e) {
   try {
     switch(action) {
       case 'getDashboard':
-        return jsonResponse_({ success: true, data: handleGetDashboard_() });
+        return jsonResponse_({ success: true, data: getCachedOrFetch_('getDashboard', handleGetDashboard_, 60) });
       case 'getToday':
-        return jsonResponse_({ success: true, data: handleGetToday_() });
+        return jsonResponse_({ success: true, data: handleGetToday_() }); // Uncached for instant updates
       case 'getStreaks':
-        return jsonResponse_({ success: true, data: handleGetStreaks_() });
+        return jsonResponse_({ success: true, data: getCachedOrFetch_('getStreaks', handleGetStreaks_, 60) });
       case 'getStatistics':
-        return jsonResponse_({ success: true, data: getStatistics_() });
+        return jsonResponse_({ success: true, data: getCachedOrFetch_('getStatistics', getStatistics_, 60) });
       case 'getTrends':
-        return jsonResponse_({ success: true, data: getTrends_() });
+        return jsonResponse_({ success: true, data: getCachedOrFetch_('getTrends', getTrends_, 60) });
       case 'getCategories':
-        return jsonResponse_({ success: true, data: getCategories_() });
+        return jsonResponse_({ success: true, data: getCachedOrFetch_('getCategories', getCategories_, 60) });
       case 'getMissed':
-        return jsonResponse_({ success: true, data: getMissed_() });
+        return jsonResponse_({ success: true, data: getCachedOrFetch_('getMissed', getMissed_, 60) });
       case 'getGoals':
-        return jsonResponse_({ success: true, data: handleGetGoals_() });
+        return jsonResponse_({ success: true, data: getCachedOrFetch_('getGoals', handleGetGoals_, 60) });
       case 'getNotes':
-        return jsonResponse_({ success: true, data: handleGetNotes_() });
+        return jsonResponse_({ success: true, data: getCachedOrFetch_('getNotes', handleGetNotes_, 60) });
       case 'getSettings':
-        return jsonResponse_({ success: true, data: handleGetSettings_() });
+        return jsonResponse_({ success: true, data: handleGetSettings_() }); // Uncached for instant updates
       case 'getTaskLists':
       case 'getGoogleTasksLists':
         return jsonResponse_({ success: true, data: handleGetGoogleTasksLists_() });
@@ -248,20 +297,30 @@ function doPost(e) {
   const action = payload.action || (e && e.parameter && e.parameter.action);
 
   try {
+    let result;
     switch(action) {
       case 'completeTask':
-        return jsonResponse_(handleCompleteTask_(payload));
+        result = handleCompleteTask_(payload);
+        break;
       case 'addNote':
-        return jsonResponse_(handleAddNote_(payload));
+        result = handleAddNote_(payload);
+        break;
       case 'setGoal':
-        return jsonResponse_(handleSetGoal_(payload));
+        result = handleSetGoal_(payload);
+        break;
       case 'updateSettings':
-        return jsonResponse_(handleUpdateSettings_(payload));
+        result = handleUpdateSettings_(payload);
+        break;
       case 'restoreBackup':
-        return jsonResponse_(handleRestoreBackup_(payload));
+        result = handleRestoreBackup_(payload);
+        break;
       default:
         return jsonError_('Unknown POST action: ' + action, 400);
     }
+
+    // Invalidate script cache immediately on any write action
+    invalidateReadCache_();
+    return jsonResponse_(result);
   } catch(err) {
     return jsonResponse_({ success: false, error: err.message, status: 500 });
   }
