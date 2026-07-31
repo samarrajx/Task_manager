@@ -660,15 +660,20 @@ function handleGetDashboard_() {
 }
 
 function handleGetToday_() {
-  try {
-    fetchAndSyncAllTasks_();
-  } catch (err) {
-    Logger.log('Sync note in handleGetToday_: ' + err.message);
-  }
+  // NOTE: Do NOT call fetchAndSyncAllTasks_() here.
+  // That call talks to the Google Tasks API and takes 10-30 seconds,
+  // causing the web app request to time out before returning data.
+  // Sync happens via the auto-trigger or Habit Tracker > Sync Tasks Now menu.
 
   const config = getConfig_();
-  const todayStr = getAdjustedTodayDateString_(config.timezone, config.cutoffHour);
-  Logger.log('[handleGetToday_] todayStr=' + todayStr + ' tz=' + config.timezone + ' cutoff=' + config.cutoffHour);
+
+  // Compute todayStr using configured timezone.
+  // Also compute using Asia/Kolkata as a safety fallback in case
+  // the project timezone is set to UTC but the user is in IST.
+  const todayStrConfigTz = getAdjustedTodayDateString_(config.timezone, config.cutoffHour);
+  const todayStrIST = getAdjustedTodayDateString_('Asia/Kolkata', config.cutoffHour);
+
+  Logger.log('[handleGetToday_] todayStr(config)=' + todayStrConfigTz + ' todayStr(IST)=' + todayStrIST + ' configTz=' + config.timezone);
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('DailyTasks');
@@ -690,22 +695,31 @@ function handleGetToday_() {
 
   for (let r = 1; r < data.length; r++) {
     const rawCell = data[r][0];
-    // Google Sheets auto-converts date strings to Date objects.
-    // Use Utilities.formatDate for Date objects; fall back to string slice.
-    let dateStr;
+
+    // Google Sheets auto-converts date strings into Date objects.
+    // We must use Utilities.formatDate (not toISOString) to avoid UTC shift.
+    // Try both the configured timezone AND IST so tasks always show
+    // even if the Apps Script project timezone is set to UTC.
+    let dateStrConfig, dateStrIST;
     if (rawCell instanceof Date) {
-      dateStr = Utilities.formatDate(rawCell, config.timezone, 'yyyy-MM-dd');
+      dateStrConfig = Utilities.formatDate(rawCell, config.timezone, 'yyyy-MM-dd');
+      dateStrIST    = Utilities.formatDate(rawCell, 'Asia/Kolkata', 'yyyy-MM-dd');
     } else {
-      dateStr = String(rawCell || '').trim().substring(0, 10);
+      dateStrConfig = String(rawCell || '').trim().substring(0, 10);
+      dateStrIST    = dateStrConfig;
     }
+
+    // Match if either timezone interpretation equals today
+    const isToday = (dateStrConfig === todayStrConfigTz) || (dateStrIST === todayStrIST);
 
     if (r <= 5) {
-      Logger.log(`[handleGetToday_] row ${r}: rawCell="${rawCell}" dateStr="${dateStr}" taskName="${data[r][2]}" status="${data[r][3]}" todayStr="${todayStr}" match=${dateStr === todayStr}`);
+      Logger.log(`[handleGetToday_] row ${r}: dateStr(cfg)="${dateStrConfig}" dateStr(IST)="${dateStrIST}" task="${data[r][2]}" status="${data[r][3]}" isToday=${isToday}`);
     }
 
-    if (dateStr === todayStr) {
+    if (isToday) {
+      // Use IST-formatted date as the canonical date returned to the frontend
       tasks.push({
-        date: dateStr,
+        date: dateStrIST,
         taskId: String(data[r][1]),
         taskName: String(data[r][2]),
         status: String(data[r][3]),
