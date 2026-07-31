@@ -201,7 +201,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
           className="surface-elevated flex flex-col items-center justify-center py-4 gap-2 cursor-pointer hover:border-indigo-500/50 transition-colors"
         >
           <BarChart3 size={20} className="text-indigo-400" />
-          <span className="text-sm text-slate-200 font-medium">Trends</span>
+          <span className="text-sm text-slate-200 font-medium">Statistics</span>
         </button>
         <button
           onClick={() => onNavigate && onNavigate('categories')}

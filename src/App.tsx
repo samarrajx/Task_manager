@@ -4,6 +4,7 @@ import { Sidebar, BottomTabBar, MoreDrawer, type TabId } from './components/Nav'
 import { TodayScreen } from './components/TodayScreen';
 import { DashboardScreen } from './components/DashboardScreen';
 import { StreaksScreen } from './components/StreaksScreen';
+import { StatisticsScreen } from './components/StatisticsScreen';
 import { TrendsScreen } from './components/TrendsScreen';
 import { CategoriesScreen } from './components/CategoriesScreen';
 import { GoalsScreen } from './components/GoalsScreen';
@@ -138,7 +139,8 @@ const TAB_LABELS: Record<TabId, string> = {
   today: 'Today',
   dashboard: 'Dashboard',
   streaks: 'Streaks',
-  stats: 'Trends',
+  stats: 'Statistics',
+  trends: 'Trends',
   categories: 'Categories',
   goals: 'Goals',
   missed: 'Missed',
@@ -151,7 +153,8 @@ const TAB_SUBTITLES: Record<TabId, string> = {
   today: "Check off today's habits",
   dashboard: 'Your progress at a glance',
   streaks: 'Current & best streaks',
-  stats: 'Completion trends over time',
+  stats: 'Key metrics & habit breakdown',
+  trends: 'Visual completion graphs & charts',
   categories: 'Breakdown by category',
   goals: 'Target goals & progress tracking',
   missed: 'Habits that slipped',
@@ -226,6 +229,8 @@ const AppShell: React.FC = () => {
       case 'streaks':
         return <StreaksScreen />;
       case 'stats':
+        return <StatisticsScreen />;
+      case 'trends':
         return <TrendsScreen />;
       case 'categories':
         return <CategoriesScreen onSelectCategory={() => navigate('today')} />;

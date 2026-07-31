@@ -2,7 +2,7 @@ import React from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import {
   Sun, Moon, Flame,
-  LayoutDashboard, CheckSquare, TrendingUp,
+  LayoutDashboard, CheckSquare, TrendingUp, BarChart3,
   PieChart, AlertCircle, BookOpen, Settings, MoreHorizontal, Target, FileText
 } from 'lucide-react';
 
@@ -11,6 +11,7 @@ export type TabId =
   | 'dashboard'
   | 'streaks'
   | 'stats'
+  | 'trends'
   | 'categories'
   | 'goals'
   | 'missed'
@@ -29,7 +30,8 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'today',      label: 'Today',      Icon: CheckSquare,    mobileTab: true },
   { id: 'dashboard',  label: 'Dashboard',  Icon: LayoutDashboard, mobileTab: true },
   { id: 'streaks',    label: 'Streaks',    Icon: Flame,           mobileTab: true },
-  { id: 'stats',      label: 'Trends',     Icon: TrendingUp,     mobileTab: false },
+  { id: 'stats',      label: 'Statistics', Icon: BarChart3,      mobileTab: false },
+  { id: 'trends',     label: 'Trends',     Icon: TrendingUp,     mobileTab: false },
   { id: 'categories', label: 'Categories', Icon: PieChart,       mobileTab: false },
   { id: 'goals',      label: 'Goals',      Icon: Target,         mobileTab: false },
   { id: 'missed',     label: 'Missed',     Icon: AlertCircle,    mobileTab: false },
