@@ -1154,7 +1154,7 @@ function fetchAndSyncAllTasks_() {
   taskLists.forEach(list => {
     const listTitle = list.title || 'Default';
     const mappedCategory = config.categoryMap[listTitle.toLowerCase()];
-    const listCategory = mappedCategory || 'General';
+    const listCategory = mappedCategory || listTitle || 'General';
 
     let tasksResponse;
     try {
