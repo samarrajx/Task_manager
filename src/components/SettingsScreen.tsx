@@ -15,7 +15,9 @@ import {
   RefreshCw,
   Download,
   Upload,
-  Database
+  Database,
+  RotateCcw,
+  AlertTriangle
 } from 'lucide-react';
 
 const COMMON_TIMEZONES = [
@@ -51,6 +53,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onSettingsSaved 
   const [refreshingLists, setRefreshingLists] = useState<boolean>(false);
   const [backingUp, setBackingUp] = useState<boolean>(false);
   const [restoring, setRestoring] = useState<boolean>(false);
+  const [resetting, setResetting] = useState<boolean>(false);
+  const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
+  const [resetConfirmText, setResetConfirmText] = useState<string>('');
 
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -616,7 +621,137 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onSettingsSaved 
           </div>
         </div>
 
-        {/* SECTION 4: Save Actions */}
+        {/* SECTION 5: Danger Zone — Reset */}
+        <div style={{
+          border: '1.5px solid rgba(196 102 90 / 0.35)',
+          borderRadius: 'var(--r-lg)',
+          overflow: 'hidden',
+        }}>
+          {/* Header */}
+          <div style={{
+            background: 'var(--status-red-bg)',
+            padding: '14px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            borderBottom: '1px solid rgba(196 102 90 / 0.20)',
+          }}>
+            <AlertTriangle size={16} style={{ color: 'var(--status-red)', flexShrink: 0 }} />
+            <span style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 14, color: 'var(--status-red)' }}>
+              Danger Zone
+            </span>
+          </div>
+
+          {/* Body */}
+          <div style={{ padding: '18px 20px', background: 'var(--bg-card)' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6, marginBottom: 16 }}>
+              <strong style={{ color: 'var(--text-1)' }}>Reset All Data</strong> permanently deletes all tracked habits,
+              streaks, goals, and journal notes from Google Sheets. Your{' '}
+              <strong>Config settings</strong> (timezone, token) are preserved.
+              This cannot be undone.
+            </p>
+
+            {!showResetConfirm ? (
+              <button
+                type="button"
+                onClick={() => { setShowResetConfirm(true); setResetConfirmText(''); }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                  padding: '10px 20px', borderRadius: 'var(--r-sm)',
+                  background: 'var(--status-red-bg)',
+                  border: '1px solid rgba(196 102 90 / 0.4)',
+                  color: 'var(--status-red)',
+                  fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                <RotateCcw size={14} />
+                Reset All Data
+              </button>
+            ) : (
+              <div style={{
+                background: 'var(--status-red-bg)',
+                border: '1px solid rgba(196 102 90 / 0.35)',
+                borderRadius: 'var(--r-md)',
+                padding: '16px 18px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+              }}>
+                <p style={{ fontSize: 13, color: 'var(--status-red)', fontWeight: 600, margin: 0 }}>
+                  ⚠️ Type <strong>RESET</strong> to confirm permanent deletion:
+                </p>
+                <input
+                  type="text"
+                  value={resetConfirmText}
+                  onChange={e => setResetConfirmText(e.target.value)}
+                  placeholder="Type RESET here"
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: 'var(--r-sm)',
+                    border: '1.5px solid rgba(196 102 90 / 0.5)',
+                    background: 'var(--bg-elevated)',
+                    color: 'var(--text-1)',
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    letterSpacing: '0.08em',
+                    outline: 'none',
+                    width: '100%',
+                  }}
+                />
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => { setShowResetConfirm(false); setResetConfirmText(''); }}
+                    className="btn btn-ghost"
+                    style={{ fontSize: 13, minHeight: 40 }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={resetConfirmText !== 'RESET' || resetting}
+                    onClick={async () => {
+                      if (resetConfirmText !== 'RESET') return;
+                      setResetting(true);
+                      setErrorMsg(null);
+                      try {
+                        await habitApi.resetAllData();
+                        setShowResetConfirm(false);
+                        setResetConfirmText('');
+                        setSuccessMsg('✅ All data reset. Starting fresh!');
+                        setTimeout(() => setSuccessMsg(null), 5000);
+                      } catch (err: any) {
+                        setErrorMsg('Reset failed: ' + (err?.message || 'Unknown error'));
+                      } finally {
+                        setResetting(false);
+                      }
+                    }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 8,
+                      padding: '10px 20px', borderRadius: 'var(--r-sm)',
+                      background: resetConfirmText === 'RESET' ? 'var(--status-red)' : 'rgba(196 102 90 / 0.3)',
+                      border: 'none',
+                      color: '#fff',
+                      fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: 13,
+                      cursor: resetConfirmText === 'RESET' ? 'pointer' : 'not-allowed',
+                      opacity: resetting ? 0.6 : 1,
+                      transition: 'background 0.2s',
+                    }}
+                  >
+                    {resetting
+                      ? <Loader2 size={14} className="animate-spin" />
+                      : <RotateCcw size={14} />}
+                    Confirm Reset
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* SECTION 6: Save Actions */}
         <div className="flex items-center justify-between surface p-4 rounded-2xl border border-slate-800">
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <ShieldCheck size={16} className="text-emerald-400" />

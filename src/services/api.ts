@@ -168,5 +168,8 @@ export const habitApi = {
     fetchApi<{ success: boolean }>('updateSettings', 'POST', { timezone, cutoffHour, categoryMap }),
 
   restoreBackup: (backupData: any) =>
-    fetchApi<{ success: boolean; message?: string }>('restoreBackup', 'POST', { backup: backupData })
+    fetchApi<{ success: boolean; message?: string }>('restoreBackup', 'POST', { backup: backupData }),
+
+  resetAllData: () =>
+    fetchApi<{ success: boolean; message?: string }>('resetAllData', 'POST', {}),
 };

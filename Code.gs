@@ -470,6 +470,9 @@ function doPost(e) {
       case 'restoreBackup':
         result = handleRestoreBackup_(payload);
         break;
+      case 'resetAllData':
+        result = handleResetAllData_();
+        break;
       default:
         return jsonError_('Unknown POST action: ' + action, 400);
     }
@@ -1036,6 +1039,53 @@ function handleRestoreBackup_(payload) {
   } catch(e){}
 
   return { success: true, message: 'Backup restored successfully!' };
+}
+
+/**
+ * handleResetAllData_ — wipes all habit data and starts fresh.
+ * Clears: DailyTasks, Streaks, Goals, Notes (data rows only, headers kept).
+ * Resets: Dashboard metrics to zero.
+ * Does NOT touch: Config tab (timezone/settings preserved).
+ */
+function handleResetAllData_() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // Sheets to wipe (data only, header row kept)
+    const dataTabs = ['DailyTasks', 'Streaks', 'Goals', 'Notes'];
+
+    dataTabs.forEach(tabName => {
+      const sheet = ss.getSheetByName(tabName);
+      if (!sheet) return;
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        sheet.deleteRows(2, lastRow - 1);
+      }
+    });
+
+    // Reset Dashboard metrics to zero
+    const dash = ss.getSheetByName('Dashboard');
+    if (dash && dash.getLastRow() > 1) {
+      const resetValues = [
+        ["Today's Completion %",    '0%'],
+        ["Today's Completed / Total", '0 / 0'],
+        ['Overall Current Streak',  '0 days'],
+        ['Longest Streak (Any Task)', '0 days'],
+        ['Missed Today',            'None'],
+        ['Last Updated',            new Date().toLocaleString()]
+      ];
+      dash.getRange(2, 1, resetValues.length, 2).setValues(resetValues);
+    }
+
+    // Wipe offline cache from CacheService
+    invalidateReadCache_();
+
+    Logger.log('[handleResetAllData_] All data reset successfully.');
+    return { success: true, message: 'All habit data has been reset. Starting fresh!' };
+  } catch (err) {
+    Logger.log('[handleResetAllData_] Error: ' + err.message);
+    return { success: false, error: err.message };
+  }
 }
 
 function handleCompleteTask_(payload) {
