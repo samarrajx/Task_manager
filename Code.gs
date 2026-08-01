@@ -815,73 +815,86 @@ function handleGetDashboard_() {
 }
 
 function handleGetToday_() {
-  // NOTE: Do NOT call fetchAndSyncAllTasks_() here.
-  // That call talks to the Google Tasks API and takes 10-30 seconds,
-  // causing the web app request to time out before returning data.
-  // Sync happens via the auto-trigger or Habit Tracker > Sync Tasks Now menu.
-
   const config = getConfig_();
 
-  // Compute todayStr using configured timezone.
-  // Also compute using Asia/Kolkata as a safety fallback in case
-  // the project timezone is set to UTC but the user is in IST.
+  // Dual-timezone todayStr (handles UTC project timezone vs IST user timezone)
   const todayStrConfigTz = getAdjustedTodayDateString_(config.timezone, config.cutoffHour);
-  const todayStrIST = getAdjustedTodayDateString_('Asia/Kolkata', config.cutoffHour);
+  const todayStrIST      = getAdjustedTodayDateString_('Asia/Kolkata', config.cutoffHour);
 
-  Logger.log('[handleGetToday_] todayStr(config)=' + todayStrConfigTz + ' todayStr(IST)=' + todayStrIST + ' configTz=' + config.timezone);
+  Logger.log('[handleGetToday_] todayStr(config)=' + todayStrConfigTz + ' todayStr(IST)=' + todayStrIST);
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss    = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('DailyTasks');
 
-  if (!sheet) {
-    Logger.log('[handleGetToday_] DailyTasks sheet not found — returning []');
+  // ── Smart auto-sync: only run if there are no tasks for today yet ──
+  // This makes the first request of each new day auto-sync without
+  // timing out on subsequent requests during the same day.
+  let hasTodayRows = false;
+  if (sheet && sheet.getLastRow() > 1) {
+    const data = sheet.getDataRange().getValues();
+    for (let r = 1; r < data.length; r++) {
+      const rawCell = data[r][0];
+      let ds;
+      if (rawCell instanceof Date) {
+        ds = Utilities.formatDate(rawCell, 'Asia/Kolkata', 'yyyy-MM-dd');
+      } else {
+        ds = String(rawCell || '').trim().substring(0, 10);
+      }
+      if (ds === todayStrIST || ds === todayStrConfigTz) {
+        hasTodayRows = true;
+        break;
+      }
+    }
+  }
+
+  if (!hasTodayRows) {
+    Logger.log('[handleGetToday_] No tasks for today found — running auto-sync now');
+    try {
+      fetchAndSyncAllTasks_();
+      markStalePendingAsMissed_();
+      invalidateReadCache_();
+    } catch (err) {
+      Logger.log('[handleGetToday_] Auto-sync error: ' + err.message);
+    }
+  }
+
+  // ── Re-read sheet after potential sync ──
+  const sheetAfterSync = ss.getSheetByName('DailyTasks');
+  if (!sheetAfterSync || sheetAfterSync.getLastRow() <= 1) {
+    Logger.log('[handleGetToday_] DailyTasks empty after sync — returning []');
     return [];
   }
 
-  const lastRow = sheet.getLastRow();
-  Logger.log('[handleGetToday_] DailyTasks lastRow=' + lastRow);
-  if (lastRow <= 1) {
-    Logger.log('[handleGetToday_] DailyTasks has no data rows — returning []');
-    return [];
-  }
-
-  const data = sheet.getDataRange().getValues();
+  const data  = sheetAfterSync.getDataRange().getValues();
   const tasks = [];
 
   for (let r = 1; r < data.length; r++) {
     const rawCell = data[r][0];
-
-    // Google Sheets auto-converts date strings into Date objects.
-    // We must use Utilities.formatDate (not toISOString) to avoid UTC shift.
-    // Try both the configured timezone AND IST so tasks always show
-    // even if the Apps Script project timezone is set to UTC.
     let dateStrConfig, dateStrIST;
     if (rawCell instanceof Date) {
-      dateStrConfig = Utilities.formatDate(rawCell, config.timezone, 'yyyy-MM-dd');
-      dateStrIST    = Utilities.formatDate(rawCell, 'Asia/Kolkata', 'yyyy-MM-dd');
+      dateStrConfig = Utilities.formatDate(rawCell, config.timezone,  'yyyy-MM-dd');
+      dateStrIST    = Utilities.formatDate(rawCell, 'Asia/Kolkata',   'yyyy-MM-dd');
     } else {
       dateStrConfig = String(rawCell || '').trim().substring(0, 10);
       dateStrIST    = dateStrConfig;
     }
 
-    // Match if either timezone interpretation equals today
     const isToday = (dateStrConfig === todayStrConfigTz) || (dateStrIST === todayStrIST);
 
-    if (r <= 5) {
-      Logger.log(`[handleGetToday_] row ${r}: dateStr(cfg)="${dateStrConfig}" dateStr(IST)="${dateStrIST}" task="${data[r][2]}" status="${data[r][3]}" isToday=${isToday}`);
+    if (r <= 3) {
+      Logger.log(`[handleGetToday_] row ${r}: IST="${dateStrIST}" task="${data[r][2]}" status="${data[r][3]}" isToday=${isToday}`);
     }
 
     if (isToday) {
-      // Use IST-formatted date as the canonical date returned to the frontend
       tasks.push({
-        date: dateStrIST,
-        taskId: String(data[r][1]),
-        taskName: String(data[r][2]),
-        status: String(data[r][3]),
+        date:        dateStrIST,
+        taskId:      String(data[r][1]),
+        taskName:    String(data[r][2]),
+        status:      String(data[r][3]),
         completedAt: data[r][4] ? String(data[r][4]) : null,
-        priority: String(data[r][5] || 'Medium'),
-        category: String(data[r][6] || 'General'),
-        isOptional: Boolean(data[r][7])
+        priority:    String(data[r][5] || 'Medium'),
+        category:    String(data[r][6] || 'General'),
+        isOptional:  Boolean(data[r][7])
       });
     }
   }
